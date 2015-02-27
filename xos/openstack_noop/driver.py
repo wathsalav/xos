@@ -5,7 +5,12 @@ from core.models import Controller
 import random
 import uuid
 
-has_openstack = True
+try:
+    from openstack.client import OpenStackClient
+    has_openstack = True
+except:
+    has_openstack = False
+
 
 manager_enabled = Config().api_nova_enabled
 
