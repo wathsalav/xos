@@ -1,15 +1,21 @@
 import urlparse
-try:
-    from keystoneclient.v2_0 import client as keystone_client
-    #from glance import client as glance_client
-    import glanceclient
-    from novaclient.v1_1 import client as nova_client
-    from neutronclient.v2_0 import client as quantum_client
-    has_openstack = True
-except:
-    has_openstack = False
+
+'''
+This is a temp hack! 
+Load openstack_noop or openstack_real at runtim based on configuration...
+'''
+from openstack_noop.client import OpenStackClient as OSClient
+from openstack_noop.client import KeyStoneClient as KSClient
+from openstack_noop.client import Glance as GlanceObject
+from openstack_noop.client import GlanceClient as GClient
+from openstack_noop.client import NovaClient as NClient
+from openstack_noop.client import NovaDB as NovaDBObject
+from openstack_noop.client import QuantumClient as QClient
 
 from xos.config import Config
+
+
+has_openstack = True
 
 def require_enabled(callable):
     def wrapper(*args, **kwds):
@@ -35,138 +41,31 @@ def parse_novarc(filename):
     f.close()
     return opts
 
-class Client:
-    def __init__(self, username=None, password=None, tenant=None, url=None, token=None, endpoint=None, controller=None, admin=True, *args, **kwds):
-       
-        self.has_openstack = has_openstack
-        self.url = controller.auth_url
-        if admin:
-            self.username = controller.admin_user
-            self.password = controller.admin_password
-            self.tenant = controller.admin_tenant
-        else:
-            self.username = None
-            self.password = None
-            self.tenant = None
-
-        if username:
-            self.username = username
-        if password:
-            self.password = password
-        if tenant:
-            self.tenant = tenant
-        if url:
-            self.url = url
-        if token:
-            self.token = token    
-        if endpoint:
-            self.endpoint = endpoint
-
-        #if '@' in self.username:
-        #    self.username = self.username[:self.username.index('@')]
-
-class KeystoneClient(Client):
+class KeystoneClient(KSClient):
     def __init__(self, *args, **kwds):
-        Client.__init__(self, *args, **kwds)
-        if has_openstack:
-            self.client = keystone_client.Client(username=self.username,
-                                                 password=self.password,
-                                                 tenant_name=self.tenant,
-                                                 auth_url=self.url
-                                                )
+        KSClient.__init__(self, *args, **kwds)
 
-    @require_enabled
-    def connect(self, *args, **kwds):
-        self.__init__(*args, **kwds)
-
-    @require_enabled
-    def __getattr__(self, name):
-        return getattr(self.client, name)
-
-
-class Glance(Client):
+class Glance(GlanceObject):
     def __init__(self, *args, **kwds):
-        Client.__init__(self, *args, **kwds)
-        if has_openstack:
-            self.client = glanceclient.get_client(host='0.0.0.0',
-                                                   username=self.username,
-                                                   password=self.password,
-                                                   tenant=self.tenant,
-                                                   auth_url=self.url)
-    @require_enabled
-    def __getattr__(self, name):
-        return getattr(self.client, name)
+        GlanceObject.__init__(self, *args, **kwds)
 
-class GlanceClient(Client):
+class GlanceClient(GClient):
     def __init__(self, version, endpoint, token, cacert=None, *args, **kwds):
-        Client.__init__(self, *args, **kwds)
-        if has_openstack:
-            self.client = glanceclient.Client(version, 
-                endpoint=endpoint, 
-                token=token,
-                cacert=cacert
-            )
+        GClient.__init__(self, *args, **kwds)
 
-    @require_enabled
-    def __getattr__(self, name):
-        return getattr(self.client, name)        
-
-class NovaClient(Client):
+class NovaClient(NClient):
     def __init__(self, *args, **kwds):
-        Client.__init__(self, *args, **kwds)
-        if has_openstack:
-            self.client = nova_client.Client(username=self.username,
-                                             api_key=self.password,
-                                             project_id=self.tenant,
-                                             auth_url=self.url,
-                                             region_name='',
-                                             extensions=[],
-                                             service_type='compute',
-                                             service_name='',
-                                             )
+        NClient.__init__(self, *args, **kwds)
 
-    @require_enabled
-    def connect(self, *args, **kwds):
-        self.__init__(*args, **kwds)
-
-    @require_enabled
-    def __getattr__(self, name):
-        return getattr(self.client, name)
-
-class NovaDB(Client):
+class NovaDB(NovaDBObject):
     def __init__(self, *args, **kwds):
-        Client.__init__(self, *args, **kwds)
-        if has_openstack:
-            self.ctx = get_admin_context()
-            nova_db_api.FLAGS(default_config_files=['/etc/nova/nova.conf'])
-            self.client = nova_db_api
+        NovaDBObject.__init__(self, *args, **kwds)
 
-
-    @require_enabled
-    def connect(self, *args, **kwds):
-        self.__init__(*args, **kwds)
-
-    @require_enabled
-    def __getattr__(self, name):
-        return getattr(self.client, name)
-
-class QuantumClient(Client):
+class QuantumClient(QClient):
     def __init__(self, *args, **kwds):
-        Client.__init__(self, *args, **kwds)
-        if has_openstack:
-            self.client = quantum_client.Client(username=self.username,
-                                                password=self.password,
-                                                tenant_name=self.tenant,
-                                                auth_url=self.url)
-    @require_enabled
-    def connect(self, *args, **kwds):
-        self.__init__(*args, **kwds)
+        QClient.__init__(self, *args, **kwds)
 
-    @require_enabled
-    def __getattr__(self, name):
-        return getattr(self.client, name)
-
-class OpenStackClient:
+class OpenStackClient(OSClient):
     """
     A simple native shell to the openstack backend services.
     This class can receive all nova calls to the underlying testbed
@@ -174,6 +73,7 @@ class OpenStackClient:
 
     def __init__ ( self, *args, **kwds) :
         # instantiate managers
+	OSClient.__init__(*args, **kwds)
         self.keystone = KeystoneClient(*args, **kwds)
         url_parsed = urlparse.urlparse(self.keystone.url)
         hostname = url_parsed.netloc.split(':')[0]
@@ -182,7 +82,7 @@ class OpenStackClient:
         
         self.glanceclient = GlanceClient('1', endpoint=glance_endpoint, token=token.id, **kwds)
         self.nova = NovaClient(*args, **kwds)
-        # self.nova_db = NovaDB(*args, **kwds)
+        self.nova_db = NovaDB(*args, **kwds)
         self.quantum = QuantumClient(*args, **kwds)
     
 
@@ -193,3 +93,4 @@ class OpenStackClient:
     @require_enabled
     def authenticate(self):
         return self.keystone.authenticate()
+

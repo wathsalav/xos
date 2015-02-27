@@ -18,7 +18,7 @@ def get_random_int():
 def get_random_uuid():
     return str(uuid.uuid4())
 
-class OpenStackNoOpDriver:
+class OpenStackDriver:
 
     def __init__(self, config = None, client=None):
         if config:

@@ -46,9 +46,73 @@ class Client:
         #if '@' in self.username:
         #    self.username = self.username[:self.username.index('@')]
 
+class KeystoneClient(Client):
+    def __init__(self, *args, **kwds):
+        Client.__init__(self, *args, **kwds)
+
+    @require_enabled
+    def connect(self, *args, **kwds):
+        self.__init__(*args, **kwds)
+
+    @require_enabled
+    def __getattr__(self, name):
+        return getattr(self.client, name)
 
 
-class OpenStackNoOpClient:
+class Glance(Client):
+    def __init__(self, *args, **kwds):
+        Client.__init__(self, *args, **kwds)
+
+    @require_enabled
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+class GlanceClient(Client):
+    def __init__(self, version, endpoint, token, cacert=None, *args, **kwds):
+        Client.__init__(self, *args, **kwds)
+
+    @require_enabled
+    def __getattr__(self, name):
+        return getattr(self.client, name)        
+
+class NovaClient(Client):
+    def __init__(self, *args, **kwds):
+        Client.__init__(self, *args, **kwds)
+
+    @require_enabled
+    def connect(self, *args, **kwds):
+        self.__init__(*args, **kwds)
+
+    @require_enabled
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+class NovaDB(Client):
+    def __init__(self, *args, **kwds):
+        Client.__init__(self, *args, **kwds)
+
+    @require_enabled
+    def connect(self, *args, **kwds):
+        self.__init__(*args, **kwds)
+
+    @require_enabled
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+class QuantumClient(Client):
+    def __init__(self, *args, **kwds):
+        Client.__init__(self, *args, **kwds)
+
+    @require_enabled
+    def connect(self, *args, **kwds):
+        self.__init__(*args, **kwds)
+
+    @require_enabled
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+
+class OpenStackClient:
     """
     A simple native shell to the openstack backend services.
     This class can receive all nova calls to the underlying testbed
@@ -63,6 +127,5 @@ class OpenStackNoOpClient:
 
     @require_enabled
     def authenticate(self):
-        #client is always authenticated
 	return True
 
