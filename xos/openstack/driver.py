@@ -9,8 +9,7 @@ try:
 except:
     has_openstack = False
 
-if has_openstack:
-	from openstack_noop.driver import OpenStackDriver as OSDriver
+from openstack_noop.driver import OpenStackDriver as OSDriver
 
 manager_enabled = Config().api_nova_enabled
 
