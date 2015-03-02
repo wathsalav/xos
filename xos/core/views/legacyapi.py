@@ -155,10 +155,10 @@ def GetInterfaces(slicename, node_ids):
             if node_id in node_ids:
                 ps_node = ps_sliver.node
 
-                ip = socket.gethostbyname(ps_node.name)
+                ip = socket.gethostbyname(ps_node.name.strip())
 
                 # search for a dedicated public IP address
-                for networkSliver in ps_sliver.networksliver_set.all():
+                for networkSliver in ps_sliver.networkslivers.all():
                     if (not networkSliver.ip):
                         continue
                     template = networkSliver.network.template
@@ -207,7 +207,6 @@ def GetConfiguration(name, slice_remap={}):
             nodemap[node['node_id']]=node['hostname']
 
         interfaces = GetInterfaces(slice["planetstack_name"], node_ids)
-        print "XXX", interfaces
         hostipmap = {}
         for interface in interfaces:
             if nodemap[interface['node_id']] not in allinterfaces:

@@ -10,9 +10,24 @@ from django.contrib.auth.signals import user_logged_in
 from django.utils import timezone
 from django.contrib.contenttypes import generic
 from suit.widgets import LinkedSelect
-from core.admin import SingletonAdmin,SliceInline,ServiceAttrAsTabInline, ReadOnlyAwareAdmin
+from core.admin import ServiceAppAdmin,SliceInline,ServiceAttrAsTabInline, ReadOnlyAwareAdmin
 
-class RequestRouterServiceAdmin(SingletonAdmin):
+class RequestRouterAdmin(ReadOnlyAwareAdmin):
+   # Change the application breadcrumb to point to an RR Service if one is
+   # defined
+
+   change_form_template = "admin/change_form_bc.html"
+   change_list_template = "admin/change_list_bc.html"
+   custom_app_breadcrumb_name = "Request Router"
+   @property
+   def custom_app_breadcrumb_url(self):
+       services = RequestRouterService.objects.all()
+       if len(services)==1:
+           return "/admin/requestrouter/requestrouterservice/%s/" % services[0].id
+       else:
+           return "/admin/requestrouter/requestrouterservice/"
+
+class RequestRouterServiceAdmin(ServiceAppAdmin):
     model = RequestRouterService
     verbose_name = "Request Router Service"
     verbose_name_plural = "Request Router Service"
@@ -23,11 +38,14 @@ class RequestRouterServiceAdmin(SingletonAdmin):
     user_readonly_fields = ["name", "enabled", "versionNumber", "description", "behindNat", "defaultTTL", "defaultAction", "lastResortAction", "maxAnswers"]
 
     suit_form_tabs =(('general', 'Request Router Service Details'),
+        ('administration', 'Administration'),
         ('slices','Slices'),
         ('serviceattrs','Additional Attributes'),
     )
 
-class ServiceMapAdmin(ReadOnlyAwareAdmin):
+    suit_form_includes = (('rradmin.html', 'top', 'administration'),)
+
+class ServiceMapAdmin(RequestRouterAdmin):
     model = ServiceMap
     verbose_name = "Service Map"
     verbose_name_plural = "Service Map"

@@ -17,6 +17,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse, resolve, NoReverseMatch
 from django.utils.encoding import force_text, python_2_unicode_compatible
 from django.utils.html import conditional_escape, format_html
+from django.utils.text import capfirst
 from django.forms.utils import flatatt, to_current_timezone
 from cgi import escape as html_escape
 
@@ -64,7 +65,7 @@ class PlainTextWidget(forms.HiddenInput):
             value = ''
         return mark_safe(str(value) + super(PlainTextWidget, self).render(name, value, attrs))
 
-class PermissionCheckingAdminMixin(object):
+class XOSAdminMixin(object):
     # call save_by_user and delete_by_user instead of save and delete
 
     def has_add_permission(self, request, obj=None):
@@ -110,7 +111,7 @@ class PermissionCheckingAdminMixin(object):
         formset.save_m2m()
 
     def get_actions(self,request):
-        actions = super(PermissionCheckingAdminMixin,self).get_actions(request)
+        actions = super(XOSAdminMixin,self).get_actions(request)
 
         if self.__user_is_readonly(request):
             if 'delete_selected' in actions:
@@ -118,7 +119,28 @@ class PermissionCheckingAdminMixin(object):
 
         return actions
 
+    def add_extra_context(self, extra_context):
+        # allow custom application breadcrumb url and name
+        extra_context["custom_app_breadcrumb_url"] = getattr(self, "custom_app_breadcrumb_url", None)
+        extra_context["custom_app_breadcrumb_name"] = getattr(self, "custom_app_breadcrumb_name", None)
+
+        # for Service admins to render their Administration page
+        if getattr(self, "extracontext_registered_admins", False):
+            admins=[]
+            for model, model_admin in admin.site._registry.items():
+                if model == self.model:
+                    continue
+                if model._meta.app_label == self.model._meta.app_label:
+                    info = {"app": model._meta.app_label,
+                            "model": model._meta.model_name,
+                            "name": capfirst(model._meta.verbose_name_plural),
+                            "url": reverse('admin:%s_%s_changelist' % (model._meta.app_label, model._meta.model_name), current_app=model._meta.app_label) }
+                    admins.append(info)
+            extra_context["registered_admins"] = admins
+
     def change_view(self,request,object_id, extra_context=None):
+        extra_context = extra_context or {}
+
         if self.__user_is_readonly(request):
             if not hasattr(self, "readonly_save"):
                 # save the original readonly fields
@@ -135,14 +157,23 @@ class PermissionCheckingAdminMixin(object):
             if hasattr(self, "inlines_save"):
                 self.inlines = self.inlines_save
 
+        self.add_extra_context(extra_context)
+
         try:
-            return super(PermissionCheckingAdminMixin, self).change_view(request, object_id, extra_context=extra_context)
+            return super(XOSAdminMixin, self).change_view(request, object_id, extra_context=extra_context)
         except PermissionDenied:
             pass
         if request.method == 'POST':
             raise PermissionDenied
         request.readonly = True
-        return super(PermissionCheckingAdminMixin, self).change_view(request, object_id, extra_context=extra_context)
+        return super(XOSAdminMixin, self).change_view(request, object_id, extra_context=extra_context)
+
+    def changelist_view(self, request, extra_context = None):
+        extra_context = extra_context or {}
+
+        self.add_extra_context(extra_context)
+
+        return super(XOSAdminMixin, self).changelist_view(request, extra_context=extra_context)
 
     def __user_is_readonly(self, request):
         return request.user.isReadOnlyUser()
@@ -160,10 +191,10 @@ class PermissionCheckingAdminMixin(object):
         # determine whether the user is an admin.
         _thread_locals.request = request
         _thread_locals.obj = obj
-        return super(PermissionCheckingAdminMixin, self).get_form(request, obj, **kwargs)
+        return super(XOSAdminMixin, self).get_form(request, obj, **kwargs)
 
     def get_inline_instances(self, request, obj=None):
-        inlines = super(PermissionCheckingAdminMixin, self).get_inline_instances(request, obj)
+        inlines = super(XOSAdminMixin, self).get_inline_instances(request, obj)
 
         # inlines that should only be shown to an admin user
         if request.user.is_admin:
@@ -172,8 +203,8 @@ class PermissionCheckingAdminMixin(object):
 
         return inlines
 
-class ReadOnlyAwareAdmin(PermissionCheckingAdminMixin, admin.ModelAdmin):
-    # Note: Make sure PermissionCheckingAdminMixin is listed before
+class ReadOnlyAwareAdmin(XOSAdminMixin, admin.ModelAdmin):
+    # Note: Make sure XOSAdminMixin is listed before
     # admin.ModelAdmin in the class declaration.
 
     pass
@@ -191,6 +222,9 @@ class SingletonAdmin (ReadOnlyAwareAdmin):
             return False
         else:
             return True
+
+class ServiceAppAdmin (SingletonAdmin):
+    extracontext_registered_admins = True
 
 class XOSTabularInline(admin.TabularInline):
     def __init__(self, *args, **kwargs):
@@ -352,7 +386,8 @@ class SliverInline(XOSTabularInline):
 
     def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
         if db_field.name == 'deployment':
-           kwargs['queryset'] = Deployment.select_by_acl(request.user)
+             
+           kwargs['queryset'] = Deployment.select_by_acl(request.user).filter(sitedeployments__nodes__isnull=False).distinct()
            kwargs['widget'] = forms.Select(attrs={'onChange': "sliver_deployment_changed(this);"})
         if db_field.name == 'flavor':
            kwargs['widget'] = forms.Select(attrs={'onChange': "sliver_flavor_changed(this);"})
@@ -683,7 +718,7 @@ class ServiceAttrAsTabInline(XOSTabularInline):
 class ServiceAdmin(XOSBaseAdmin):
     list_display = ("backend_status_icon","name","description","versionNumber","enabled","published")
     list_display_links = ('backend_status_icon', 'name', )
-    fieldList = ["backend_status_text","name","description","versionNumber","enabled","published"]
+    fieldList = ["backend_status_text","name","description","versionNumber","enabled","published","view_url","icon_url"]
     fieldsets = [(None, {'fields': fieldList, 'classes':['suit-tab suit-tab-general']})]
     inlines = [ServiceAttrAsTabInline,SliceInline]
     readonly_fields = ('backend_status_text', )
@@ -700,6 +735,13 @@ class SiteNodeInline(XOSTabularInline):
     fields = ['name', 'site_deployment']
     extra = 0
     suit_classes = 'suit-tab suit-tab-nodes'
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # only display site deployments associated with this site
+        if db_field.name ==  'site_deployment':
+            kwargs['queryset'] = SiteDeployment.objects.filter(site__id=int(request.path.split('/')[-2]))
+
+        return super(SiteNodeInline, self).formfield_for_foreignkey(db_field, request, **kwargs)
 
 class SiteAdmin(XOSBaseAdmin):
     #fieldList = ['backend_status_text', 'name', 'site_url', 'enabled', 'is_public', 'login_base', 'accountLink','location']
@@ -1152,8 +1194,8 @@ class ControllerUserInline(XOSTabularInline):
     readonly_fields=['controller']
 
 
-class UserAdmin(PermissionCheckingAdminMixin, UserAdmin):
-    # Note: Make sure PermissionCheckingAdminMixin is listed before
+class UserAdmin(XOSAdminMixin, UserAdmin):
+    # Note: Make sure XOSAdminMixin is listed before
     # admin.ModelAdmin in the class declaration.
 
     class Meta:

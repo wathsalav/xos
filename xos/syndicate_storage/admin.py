@@ -10,11 +10,26 @@ from django.contrib.auth.signals import user_logged_in
 from django.utils import timezone
 from django.contrib.contenttypes import generic
 from suit.widgets import LinkedSelect
-from core.admin import ReadOnlyAwareAdmin,SingletonAdmin,SliceInline,ServiceAttrAsTabInline,XOSBaseAdmin, XOSTabularInline
+from core.admin import ReadOnlyAwareAdmin,ServiceAppAdmin,SliceInline,ServiceAttrAsTabInline,XOSBaseAdmin, XOSTabularInline
 from suit.widgets import LinkedSelect
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 
-class SyndicateServiceAdmin(SingletonAdmin,ReadOnlyAwareAdmin):
+class SyndicateAdmin(ReadOnlyAwareAdmin):
+   # Change the application breadcrumb to point to an RR Service if one is
+   # defined
+
+   change_form_template = "admin/change_form_bc.html"
+   change_list_template = "admin/change_list_bc.html"
+   custom_app_breadcrumb_name = "Syndicate_Storage"
+   @property
+   def custom_app_breadcrumb_url(self):
+       services = SyndicateService.objects.all()
+       if len(services)==1:
+           return "/admin/syndicate_storage/syndicateservice/%s/" % services[0].id
+       else:
+           return "/admin/syncdicate_storage/syndicateservice/"
+
+class SyndicateServiceAdmin(ServiceAppAdmin):
     model = SyndicateService
     verbose_name = "Syndicate Storage"
     verbose_name_plural = "Syndicate Storage"
@@ -25,9 +40,12 @@ class SyndicateServiceAdmin(SingletonAdmin,ReadOnlyAwareAdmin):
     user_readonly_fields = ['name','enabled','versionNumber','description']
 
     suit_form_tabs =(('general', 'Syndicate Storage Details'),
+        ('administration', 'Administration'),
         ('slices','Slices'),
         ('serviceattrs','Additional Attributes'),
     )
+
+    suit_form_includes = (('syndicateadmin.html', 'top', 'administration'),)
 
 
 class VolumeAccessRightInline(XOSTabularInline):
@@ -100,7 +118,7 @@ class VolumeSliceInline(XOSTabularInline):
     readonly_fields = ['credentials_blob']
  
 
-class VolumeAdmin(ReadOnlyAwareAdmin):
+class VolumeAdmin(SyndicateAdmin):
     model = Volume
    
     def get_readonly_fields(self, request, obj=None ):
