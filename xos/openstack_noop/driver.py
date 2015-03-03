@@ -49,7 +49,7 @@ class OpenStackDriver:
             admin_driver = self.admin_driver(tenant=tenant, controller=controller)
             client = OpenStackClient(tenant=tenant, controller=admin_driver.controller)
 
-        driver = OpenStackNoOpDriver(client=client)
+        driver = OpenStackDriver(client=client)
         #driver.admin_user = admin_driver.admin_user
         #driver.controller = admin_driver.controller
         return driver
@@ -58,7 +58,7 @@ class OpenStackDriver:
         if isinstance(controller, int):
             controller = Controller.objects.get(id=controller.id)
         client = OpenStackClient(tenant=tenant, controller=controller, cacert=self.config.nova_ca_ssl_cert)
-        driver = OpenStackNoOpDriver(client=client)
+        driver = OpenStackDriver(client=client)
         driver.admin_user = {'id': 'u0000', 'name' : 'admin', 'email' : 'admin@noop.controll.er', 'enabled': True}
         driver.controller = controller
         return driver    

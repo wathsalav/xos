@@ -4,8 +4,10 @@ import urlparse
 This is a temp hack! 
 Load openstack_noop or openstack_real at runtim based on configuration...
 '''
+is_openstack_noop = True
+
 from openstack_noop.client import OpenStackClient as OSClient
-from openstack_noop.client import KeyStoneClient as KSClient
+from openstack_noop.client import KeystoneClient as KSClient
 from openstack_noop.client import Glance as GlanceObject
 from openstack_noop.client import GlanceClient as GClient
 from openstack_noop.client import NovaClient as NClient
@@ -73,16 +75,18 @@ class OpenStackClient(OSClient):
 
     def __init__ ( self, *args, **kwds) :
         # instantiate managers
-	OSClient.__init__(*args, **kwds)
+	OSClient.__init__(self, *args, **kwds)
         self.keystone = KeystoneClient(*args, **kwds)
         url_parsed = urlparse.urlparse(self.keystone.url)
         hostname = url_parsed.netloc.split(':')[0]
-        token = self.keystone.client.tokens.authenticate(username=self.keystone.username, password=self.keystone.password, tenant_name=self.keystone.tenant)
-        glance_endpoint = self.keystone.service_catalog.url_for(service_type='image', endpoint_type='publicURL')
-        
-        self.glanceclient = GlanceClient('1', endpoint=glance_endpoint, token=token.id, **kwds)
-        self.nova = NovaClient(*args, **kwds)
-        self.nova_db = NovaDB(*args, **kwds)
+	#if not is_openstack_noop:
+        #	token = self.keystone.client.tokens.authenticate(username=self.keystone.username, password=self.keystone.password, tenant_name=self.keystone.tenant)
+        #	glance_endpoint = self.keystone.service_catalog.url_for(service_type='image', endpoint_type='publicURL')
+        #	self.glanceclient = GlanceClient('1', endpoint=glance_endpoint, token=token.id, **kwds)
+        #else:
+        #	self.glanceclient = GlanceClient('1', endpoint="", token=None, **kwds)
+        #self.nova = NovaClient(*args, **kwds)
+        #self.nova_db = NovaDB(*args, **kwds)
         self.quantum = QuantumClient(*args, **kwds)
     
 
