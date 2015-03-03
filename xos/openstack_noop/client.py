@@ -111,6 +111,18 @@ class QuantumClient(Client):
     def __getattr__(self, name):
         return getattr(self.client, name)
 
+class KeyStoneClient(Client):
+    def __init__(self, *args, **kwds):
+        Client.__init__(self, *args, **kwds)
+
+    @require_enabled
+    def connect(self, *args, **kwds):
+        self.__init__(*args, **kwds)
+
+    @require_enabled
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
 
 class OpenStackClient:
     """
