@@ -1,0 +1,170 @@
+#!/usr/bin/python
+
+import os
+import pdb
+import copy
+import sys
+import json
+import re
+from django.template import Context, Template
+
+blacklist = ['SingletonModel','PlCoreBase']
+
+# Django set up
+
+sys.path.append('.')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "xos.settings")
+from django.db.models.fields.related import ForeignKey, ManyToManyField
+from core.models import *
+
+def singular(foo, keys):
+	for k in keys:
+		if (foo==k+'es'):
+			return k
+		elif (foo==k+'s'):
+			return k
+	raise Exception('Plural to singular error for %s'%foo)
+
+g = globals()
+
+def enum_classes():
+	model_classes = []
+	for c in g.values():
+		if type(c)==type(PlCoreBase) and c.__name__ not in blacklist:
+			model_classes.append(c)
+	return model_classes
+
+
+class GenObj(object):
+	def __str__(self):
+		return str(self.model.__name__.lower())
+
+	def __init__(self, m):
+		self.model = m
+		self.props = []
+		self.refs = []
+		self.plural_name = None
+
+	def plural(self):
+		if (self.plural_name):
+			return self.plural_name
+		else:
+			name = str(self)
+			if (name.endswith('s')):
+				return name+'es'
+			else:
+				return name+'s'
+
+        def singular(self):
+            return str(self)
+
+        def rest_name(self):
+            # These are things that either for historic reasons or due to incorrect naming,
+            # got called something different than the autogen thinks they should be
+            # called.
+            REST_FIXUP = {'controllernetworkses': 'controllernetworks',
+                            'controllerimageses': 'controllerimages',
+                            'controllersliceses': 'controllerslices',
+                            'controlleruserses': 'controllerusers',
+                            'sitedeploymentses': 'sitedeployments',
+                            'siteroles': 'site_roles',
+                            'sliceprivileges': 'slice_privileges',
+                            'sliceroles': 'slice_roles',
+                            }
+            return REST_FIXUP.get(self.plural(), self.plural())
+
+	def camel(self):
+		name = str(self.model.__name__)
+		return name
+		
+class Generator(dict):
+	def all(self):
+		return self.values()
+	
+	def regex(self, r):
+		filtered = filter(lambda o:re.match(r,str(o)), self.values())
+		return filtered
+
+	def add_object(self, o):
+		obj = GenObj(o)
+		fields = o._meta.fields
+		self[str(obj).lower()]=obj
+
+	def compute_links(self):
+		for obj in self.values():
+			#if (str(obj)=='network'):
+			#	pdb.set_trace()
+			fields = obj.model._meta.fields
+			for f in fields:
+				if (f and f.rel):
+					to_name = str(f.rel.to)
+				else:
+					to_name = None
+
+				if type(f)==ForeignKey and to_name and to_name in self.keys():
+					refobj = self[f.to_name]
+
+					if (str(obj)=='slice' and f.to_name=='networks'):
+						obj.refs.append(refobj)
+					related_name = f.related_query_name()
+					if (related_name!='+' and related_name.lower()!=str(obj).lower()):
+						cobj = copy.deepcopy(obj)
+						cobj.multi = True
+						cobj.plural_name = related_name
+						refobj.refs.append(cobj)
+				else:
+					obj.props.append(f.name)
+
+			m2m = obj.model._meta.many_to_many
+			for f in m2m:
+				try:
+					related_model_name = f.m2m_reverse_field_name()
+				except:
+					related_model_name = f.m2m_db_table().rsplit('_',1)[-1]
+
+				related_name = f.related_query_name()
+				if related_model_name in self.keys():
+                                        #print "XXX1", obj, f, related_name, related_model_name
+					refobj = self[related_model_name]
+					cobj = copy.deepcopy(obj)
+					cobj.multi=True
+					refobj.refs.append(cobj)
+
+                                # deal with upgradeFrom_rel_+
+                                if (related_name.endswith("+")):
+                                    continue
+
+				if (related_name!='+' and related_name.lower()!=str(obj).lower()):
+                                        #print "XXX2", obj, f, related_name, related_model_name, refobj.plural_name
+                                        refobj = self[related_model_name]
+					cobj = copy.deepcopy(refobj)
+					cobj.multi = True
+
+					obj.refs.append(cobj)
+
+
+
+			
+def main():
+	try:
+		output = sys.argv[1]
+	except:
+		print 'Usage: modelgen <output template>'
+		exit(1)
+
+	generator = Generator()
+
+	models = enum_classes()
+
+	for m in models:
+		generator.add_object(m)
+
+	generator.compute_links()
+	template_contents = open(output).read()
+	template = Template(template_contents)
+	context = Context({'generator':generator})
+	print template.render(context)
+
+
+if (__name__=='__main__'):
+	main()
